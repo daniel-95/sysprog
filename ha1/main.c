@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <ucontext.h>
 
 #include "int_array.h"
 #include "heap.h"
