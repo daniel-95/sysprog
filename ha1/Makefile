@@ -1,8 +1,8 @@
 all:
-	gcc main.c heap.c -o run
+	gcc -Icoro main.c heap.c coro/coro.c -o run
 debug:
-	gcc main.c heap.c -o run -g
+	gcc -Icoro main.c heap.c coro/coro.c -o run -g
 prof:
-	gcc main.c heap.c -o run -pg
+	gcc -Icoro main.c heap.c coro/coro.c -o run -pg
 clean:
 	rm run gmon.out

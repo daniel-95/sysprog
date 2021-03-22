@@ -1,3 +1,5 @@
 *run
 *.txt
 gmon.out
+tests
+*.sh
