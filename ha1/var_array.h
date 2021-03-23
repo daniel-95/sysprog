@@ -1,6 +1,9 @@
 #ifndef __VAR_ARRAY_H
 #define __VAR_ARRAY_H
 
+#include <stddef.h>
+#include <stdlib.h>
+
 struct var_array {
 	void *data;
 	int len;
@@ -8,15 +11,7 @@ struct var_array {
 	int el_size;
 };
 
-static struct var_array * var_array_init(size_t reserve, size_t el_size) {
-	struct var_array *new = malloc(sizeof(struct var_array));
-	new->data = malloc(reserve * el_size);
-	new->el_size = el_size;
-	new->cap = reserve;
-	new->len = 0;
-
-	return new;
-}
+struct var_array * var_array_init(size_t reserve, size_t el_size);
 
 #define var_array_put(va, el, type) {                                \
 	if(va->len >= va->cap) {                                     \

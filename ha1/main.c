@@ -19,7 +19,6 @@ struct sort_args {
 int partition(struct var_array *nums, int low, int high) {
 	int p = var_array_get(nums, high, int);
 	int i = low - 1;
-	int tmp;
 
 	coro_yield();
 
@@ -191,16 +190,23 @@ int main(int argc, char *argv[]) {
 	coro_run();
 
 	// releasing memory
-	for(int i = 0; i < argc - 1; i++)
+	for(int i = 0; i < argc - 1; i++) {
 		var_array_free(lists[i]);
+		free(wg_reads[i]);
+	}
 
 	free(lists);
+	free(ra);
+	free(wg_reads);
 	free(d);
 
-	for(int i = 0; i < argc - 1; i++)
+	for(int i = 0; i < argc - 1; i++) {
+		coro_free(c_read[i]);
 		coro_free(c[i]);
+	}
 
 	free(c);
+	free(c_read);
 	free(wg_sort_files);
 	free(ma);
 

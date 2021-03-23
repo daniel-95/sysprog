@@ -79,7 +79,7 @@ void coro_prepare() {
 
 struct coroutine *coro_init(void (*f)(void*), void *args) {
 	struct coroutine *coro_new = malloc(sizeof(struct coroutine));
-	memset(coro_new, sizeof(struct coroutine), 0);
+	memset(coro_new, 0, sizeof(struct coroutine));
 	coro_new->state = SUSPENDED;
 
 	getcontext(&coro_new->uctx);

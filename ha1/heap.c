@@ -8,6 +8,8 @@ struct heap *new_heap(int size) {
 	h->len = 0;
 	h->cap = size;
 	h->data = malloc(size * sizeof(struct heap_entry));
+
+	return h;
 }
 
 void heap_free(struct heap *h) {

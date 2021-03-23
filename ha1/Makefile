@@ -1,8 +1,8 @@
 all:
-	gcc -Icoro main.c heap.c coro/coro.c -o run
+	clang -Icoro main.c heap.c var_array.c coro/coro.c -o run -Wall -Werror
 debug:
-	gcc -Icoro main.c heap.c coro/coro.c -o run -g
-prof:
-	gcc -Icoro main.c heap.c coro/coro.c -o run -pg
+	clang -Icoro main.c heap.c var_array.c coro/coro.c -o run -Wall -Werror -g
+sanitize:
+	clang -Icoro main.c heap.c var_array.c coro/coro.c -o run -fsanitize=address -Wall -Werror
 clean:
-	rm run gmon.out
+	rm run

@@ -23,8 +23,8 @@ struct coroutine {
 	coro_state state;
 };
 
-static struct coroutine *current;
-static struct coroutine *coros[64];
+struct coroutine *current;
+struct coroutine *coros[64];
 static int current_i = 0;
 static int coro_len = 0;
 ucontext_t uctx_finished, uctx_return;
