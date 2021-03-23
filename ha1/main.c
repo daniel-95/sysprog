@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <ucontext.h>
 #include <string.h>
+#include <aio.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "var_array.h"
 #include "heap.h"
@@ -69,7 +74,27 @@ struct read_args {
 	struct var_array *list;
 };
 
-void read_file_alloc(void *vargs) {
+struct aio_ctx {
+	struct aiocb *aiocb;
+	struct wait_group *wg_read;
+	struct var_array *list;
+};
+
+void sigusr1_read_handler(int sig, siginfo_t *si, void *ptr) {
+	struct aio_ctx ctx = (struct aio_ctx*)si->si_value.sival_ptr;
+	int in, offset;
+	char *data = (char *)ctx->aiocb->aio_buf;
+
+	while(sscanf(data, "%d%n", &in, &offset) == 1) {
+		var_array_put(ctx->list, in, int);
+		data += offset;
+	}
+
+	free(si->si_value.sival_ptr);
+	wg_done(ctx->wg_read);
+}
+
+void read_file_async(void *vargs) {
 	struct read_args *args = (struct read_args *) vargs;
 	wg_add(args->wg_read);
 
@@ -81,16 +106,17 @@ void read_file_alloc(void *vargs) {
 		return;
 	}
 
-	int in;
-
-	coro_yield();
-	while(fscanf(fh, "%d", &in) == 1) {
-		var_array_put(args->list, in, int);
-		coro_yield();
-	}
-
-	fclose(fh);
-	wg_done(args->wg_read);
+//	int in;
+//
+//	coro_yield();
+//	while(fscanf(fh, "%d", &in) == 1) {
+//		var_array_put(args->list, in, int);
+//		coro_yield();
+//	}
+//
+//	fclose(fh);
+//	wg_done(args->wg_read);
+	
 }
 
 struct merge_args {
