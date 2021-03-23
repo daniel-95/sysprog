@@ -12,9 +12,8 @@
 
 struct sort_args {
 	struct var_array *nums;
-	int low;
-	int high;
-	struct wait_group *wg;
+	struct wait_group *wg_sort;
+	struct wait_group *wg_read;
 };
 
 int partition(struct var_array *nums, int low, int high) {
@@ -43,55 +42,56 @@ int partition(struct var_array *nums, int low, int high) {
 	return i+1;
 }
 
-void sort_numbers_quickly(void *vargs) {
-	struct sort_args *args = (struct sort_args*) vargs;
-	wg_add(args->wg);
+void sort_numbers_quickly(struct var_array *nums, int low, int high, struct wait_group *wg_sort) {
+	wg_add(wg_sort);
 
-	if(args->low < args->high) {
+	if(low < high) {
 		coro_yield();
-		int pivot = partition(args->nums, args->low, args->high);
-		struct sort_args l = {
-			.nums = args->nums,
-			.low = args->low,
-			.high = pivot-1,
-			.wg = args->wg
-		};
-
+		int pivot = partition(nums, low, high);
 		coro_yield();
-
-		struct sort_args r = {
-			.nums = args->nums,
-			.low = pivot+1,
-			.high = args->high,
-			.wg = args->wg
-		};
-
+		sort_numbers_quickly(nums, low, pivot-1, wg_sort);
 		coro_yield();
-		sort_numbers_quickly(&l);
-		coro_yield();
-		sort_numbers_quickly(&r);
+		sort_numbers_quickly(nums, pivot+1, high, wg_sort);
 	}
 
-	wg_done(args->wg);
+	wg_done(wg_sort);
 }
 
-struct var_array *read_file_alloc(char *file_name) {
-	FILE *fh = fopen(file_name, "r");
+void sort(void *vargs) {
+	struct sort_args *args = (struct sort_args*) vargs;
+	wg_wait(args->wg_read);
 
+	sort_numbers_quickly(args->nums, 0, var_array_len(args->nums) - 1, args->wg_sort);
+}
+
+struct read_args {
+	char *file_name;
+	struct wait_group *wg_read;
+	struct var_array *list;
+};
+
+void read_file_alloc(void *vargs) {
+	struct read_args *args = (struct read_args *) vargs;
+	wg_add(args->wg_read);
+
+	FILE *fh = fopen(args->file_name, "r");
+
+	coro_yield();
 	if(fh == NULL) {
 		errdump("couldn't open the file");
-		return 0;
+		return;
 	}
 
 	int in;
 
-	struct var_array *buf = var_array_init(8, sizeof(int));
-
-	while(fscanf(fh, "%d", &in) == 1)
-		var_array_put(buf, in, int);
+	coro_yield();
+	while(fscanf(fh, "%d", &in) == 1) {
+		var_array_put(args->list, in, int);
+		coro_yield();
+	}
 
 	fclose(fh);
-	return buf;
+	wg_done(args->wg_read);
 }
 
 struct merge_args {
@@ -154,20 +154,30 @@ int main(int argc, char *argv[]) {
 	coro_prepare();
 
 	struct var_array **lists = malloc((argc - 1) * sizeof(struct var_array*));
+	struct read_args *ra = malloc((argc - 1) * sizeof(struct read_args));
+	struct wait_group **wg_reads = malloc((argc - 1) * sizeof(struct wait_group*));
+	struct coroutine **c_read = malloc(sizeof(struct coroutine*) * (argc - 1));
 
-	for(int i = 0; i < argc - 1; i++)
-		lists[i] = read_file_alloc(argv[i + 1]);
+	for(int i = 0; i < argc - 1; i++) {
+		wg_reads[i] = wg_new();
+		lists[i] = var_array_init(8, sizeof(int));
+		ra[i].file_name = argv[i + 1];
+		ra[i].wg_read = wg_reads[i];
+		ra[i].list = lists[i];
+
+		c_read[i] = coro_init(read_file_alloc, &ra[i]);
+		coro_put(c_read[i]);
+	}
 
 	struct sort_args *d = malloc(sizeof(struct sort_args) * (argc - 1));
 	struct coroutine **c = malloc(sizeof(struct coroutine*) * (argc - 1));
 	struct wait_group *wg_sort_files = wg_new();
 	for(int i = 0; i < argc - 1; i++) {
 		d[i].nums = lists[i];
-		d[i].low = 0;
-		d[i].high = lists[i]->len - 1;
-		d[i].wg = wg_sort_files;
+		d[i].wg_sort = wg_sort_files;
+		d[i].wg_read = wg_reads[i];
 
-		c[i] = coro_init(sort_numbers_quickly, &d[i]);
+		c[i] = coro_init(sort, &d[i]);
 		coro_put(c[i]);
 	}
 

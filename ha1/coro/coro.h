@@ -44,6 +44,7 @@ void coro_free(struct coroutine *c);
 
 struct wait_group {
 	int cnt;
+	bool fresh;
 };
 
 struct wait_group *wg_new();

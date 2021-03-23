@@ -3,3 +3,4 @@
 gmon.out
 tests
 *.sh
+tags

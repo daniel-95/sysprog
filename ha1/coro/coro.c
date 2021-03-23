@@ -99,10 +99,12 @@ void coro_free(struct coroutine *c) {
 struct wait_group *wg_new() {
 	struct wait_group *wg = malloc(sizeof(struct wait_group));
 	wg->cnt = 0;
+	wg->fresh = true;
 	return wg;
 }
 
 void wg_add(struct wait_group *wg) {
+	wg->fresh = false;
 	wg->cnt++;
 }
 
@@ -114,7 +116,7 @@ void wg_done(struct wait_group *wg) {
 void wg_wait(struct wait_group *wg) {
 	getcontext(&current->uctx_wait);
 
-	if(wg->cnt == 0) {
+	if(wg->fresh == false && wg->cnt == 0) {
 		current->state = RUNNING;
 		return;
 	}
