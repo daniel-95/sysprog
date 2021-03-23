@@ -77,19 +77,22 @@ void coro_prepare() {
 	is_done = false;
 }
 
-struct coroutine *coro_init(void (*f)(void*), void *args, char *name) {
+struct coroutine *coro_init(void (*f)(void*), void *args) {
 	struct coroutine *coro_new = malloc(sizeof(struct coroutine));
 	memset(coro_new, sizeof(struct coroutine), 0);
 	coro_new->state = SUSPENDED;
-	strncpy(coro_new->name, name, (strlen(name) < 64) ? strlen(name) : 64);
 
 	getcontext(&coro_new->uctx);
 	coro_new->uctx.uc_stack.ss_sp = coro_new->stack;
 	coro_new->uctx.uc_stack.ss_size = 32 * 1024;
 	coro_new->uctx.uc_link = &uctx_finished;
-	makecontext(&coro_new->uctx, f, 1, args);
+	makecontext(&coro_new->uctx, (void (*)(void))f, 1, args);
 
 	return coro_new;
+}
+
+void coro_free(struct coroutine *c) {
+	free(c);
 }
 
 // wait group

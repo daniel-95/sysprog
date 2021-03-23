@@ -1,13 +1,18 @@
 #include <stdlib.h>
 
 #include "heap.h"
-#include "int_array.h"
+#include "var_array.h"
 
 struct heap *new_heap(int size) {
 	struct heap *h = malloc(sizeof(struct heap));
 	h->len = 0;
 	h->cap = size;
 	h->data = malloc(size * sizeof(struct heap_entry));
+}
+
+void heap_free(struct heap *h) {
+	free(h->data);
+	free(h);
 }
 
 void heapify(struct heap *h, int i) {
@@ -19,14 +24,14 @@ void heapify(struct heap *h, int i) {
 	struct heap_entry he_rt = h->data[r];
 	struct heap_entry he_i = h->data[i];
 
-	if(l < h->len && he_lt.arr->data[he_lt.idx] < he_i.arr->data[he_i.idx])
+	if(l < h->len && var_array_get(he_lt.arr, he_lt.idx, int) < var_array_get(he_i.arr, he_i.idx, int))
 		smallest = l;
 	else
 		smallest = i;
 
 	struct heap_entry he_smallest = h->data[smallest];
 
-	if(r < h->len && he_rt.arr->data[he_rt.idx] < he_smallest.arr->data[he_smallest.idx]) {
+	if(r < h->len && var_array_get(he_rt.arr, he_rt.idx, int) < var_array_get(he_smallest.arr, he_smallest.idx, int)) {
 		smallest = r;
 		he_smallest = he_rt;
 	}
@@ -47,7 +52,7 @@ void build_min_heap(struct heap *h) {
 		heapify(h, p);
 }
 
-void heap_add(struct heap *h, struct int_array *ia) {
+void heap_add(struct heap *h, struct var_array *ia) {
 	if(h->len >= h->cap)
 		return;
 
@@ -56,3 +61,4 @@ void heap_add(struct heap *h, struct int_array *ia) {
 		.idx = 0
 	};
 }
+

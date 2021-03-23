@@ -17,7 +17,6 @@ typedef enum {
 } coro_state;
 
 struct coroutine {
-	char name[64];
 	char stack[128 * 1024];
 	ucontext_t uctx;
 	ucontext_t uctx_wait;
@@ -38,7 +37,8 @@ void coro_put(struct coroutine *coro_new);
 void coro_run();
 void coro_finished();
 void coro_prepare();
-struct coroutine * coro_init(void (*f)(void*), void *args, char *name);
+struct coroutine * coro_init(void (*f)(void*), void *args);
+void coro_free(struct coroutine *c);
 
 // waitgroup
 

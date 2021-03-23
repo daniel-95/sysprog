@@ -3,7 +3,7 @@
 #include <ucontext.h>
 #include <string.h>
 
-#include "int_array.h"
+#include "var_array.h"
 #include "heap.h"
 #include "coro.h"
 
@@ -11,34 +11,34 @@
 #define errdump(msg) printf("[ERROR] %s\n", msg);
 
 struct sort_args {
-	int *nums;
+	struct var_array *nums;
 	int low;
 	int high;
 	struct wait_group *wg;
 };
 
-int partition(int *nums, int low, int high) {
-	int p = nums[high];
+int partition(struct var_array *nums, int low, int high) {
+	int p = var_array_get(nums, high, int);
 	int i = low - 1;
 	int tmp;
 
+	coro_yield();
+
 	for(int j = low; j < high; j++) {
-		if(nums[j] > p)
+		if(var_array_get(nums, j, int) > p) {
+			coro_yield();
 			continue;
+		}
 
 		coro_yield();
 
 		i++;
-		tmp = nums[i];
-		nums[i] = nums[j];
-		nums[j] = tmp;
+		coro_yield();
+		var_array_swap(nums, i, j, int);
 	}
 
 	coro_yield();
-
-	tmp = nums[i+1];
-	nums[i+1] = nums[high];
-	nums[high] = tmp;
+	var_array_swap(nums, i+1, high, int);
 
 	return i+1;
 }
@@ -48,6 +48,7 @@ void sort_numbers_quickly(void *vargs) {
 	wg_add(args->wg);
 
 	if(args->low < args->high) {
+		coro_yield();
 		int pivot = partition(args->nums, args->low, args->high);
 		struct sort_args l = {
 			.nums = args->nums,
@@ -67,13 +68,14 @@ void sort_numbers_quickly(void *vargs) {
 
 		coro_yield();
 		sort_numbers_quickly(&l);
+		coro_yield();
 		sort_numbers_quickly(&r);
 	}
 
 	wg_done(args->wg);
 }
 
-struct int_array *read_file_alloc(char *file_name) {
+struct var_array *read_file_alloc(char *file_name) {
 	FILE *fh = fopen(file_name, "r");
 
 	if(fh == NULL) {
@@ -83,19 +85,10 @@ struct int_array *read_file_alloc(char *file_name) {
 
 	int in;
 
-	struct int_array *buf = malloc(sizeof(struct int_array*));
-	buf->len = 0;
-	buf->cap = 8;
-	buf->data = malloc(buf->cap * sizeof(int));
+	struct var_array *buf = var_array_init(8, sizeof(int));
 
-	while(fscanf(fh, "%d", &in) == 1) {
-		if(buf->len == buf->cap) {
-			buf->cap *= 2;
-			buf->data = realloc(buf->data, buf->cap * sizeof(int));
-		}
-
-		buf->data[buf->len++] = in;
-	}
+	while(fscanf(fh, "%d", &in) == 1)
+		var_array_put(buf, in, int);
 
 	fclose(fh);
 	return buf;
@@ -104,7 +97,7 @@ struct int_array *read_file_alloc(char *file_name) {
 struct merge_args {
 	struct wait_group *wg_sort_files;
 	int lists_num;
-	struct int_array **lists;
+	struct var_array **lists;
 };
 
 void grand_merge(void *vargs) {
@@ -120,6 +113,8 @@ void grand_merge(void *vargs) {
 	build_min_heap(h);
 
 	int print_count = 0;
+	coro_yield();
+
 	while(h->len > 0/* just in case */) {
 		struct heap_entry he = h->data[0];
 
@@ -128,7 +123,9 @@ void grand_merge(void *vargs) {
 		else
 			printf(" ");
 
-		printf("%d", he.arr->data[he.idx++]);
+		coro_yield();
+
+		printf("%d", var_array_get(he.arr, he.idx++, int));
 		h->data[0] = he;
 
 		if(he.idx == he.arr->len) {
@@ -137,11 +134,15 @@ void grand_merge(void *vargs) {
 			h->len--;
 		}
 
+		coro_yield();
+
 		if(h->len == 0)
 			break;
 
 		heapify(h, 0);
 	}
+
+	heap_free(h);
 }
 
 int main(int argc, char *argv[]) {
@@ -152,7 +153,7 @@ int main(int argc, char *argv[]) {
 
 	coro_prepare();
 
-	struct int_array **lists = malloc((argc - 1) * sizeof(struct int_array*));
+	struct var_array **lists = malloc((argc - 1) * sizeof(struct var_array*));
 
 	for(int i = 0; i < argc - 1; i++)
 		lists[i] = read_file_alloc(argv[i + 1]);
@@ -161,16 +162,12 @@ int main(int argc, char *argv[]) {
 	struct coroutine **c = malloc(sizeof(struct coroutine*) * (argc - 1));
 	struct wait_group *wg_sort_files = wg_new();
 	for(int i = 0; i < argc - 1; i++) {
-		char name[64];
-		strncpy(name, "coro0", 5);
-		name[5] = '\0';
-		name[4] = '0' + i;
-		d[i].nums = lists[i]->data;
+		d[i].nums = lists[i];
 		d[i].low = 0;
 		d[i].high = lists[i]->len - 1;
 		d[i].wg = wg_sort_files;
 
-		c[i] = coro_init(sort_numbers_quickly, &d[i], name);
+		c[i] = coro_init(sort_numbers_quickly, &d[i]);
 		coro_put(c[i]);
 	}
 
@@ -179,9 +176,25 @@ int main(int argc, char *argv[]) {
 	ma->lists = lists;
 	ma->lists_num = argc-1;
 
-	struct coroutine *merge = coro_init(grand_merge, ma, "merger");
+	struct coroutine *merge = coro_init(grand_merge, ma);
 	coro_put(merge);
 	coro_run();
+
+	// releasing memory
+	for(int i = 0; i < argc - 1; i++)
+		var_array_free(lists[i]);
+
+	free(lists);
+	free(d);
+
+	for(int i = 0; i < argc - 1; i++)
+		coro_free(c[i]);
+
+	free(c);
+	free(wg_sort_files);
+	free(ma);
+
+	coro_free(merge);
 
 	return 0;
 }
