@@ -22,8 +22,8 @@ void heapify(struct heap *h, int i) {
 	int r = right(i);
 	int smallest;
 
-	struct heap_entry he_lt = h->data[l];
-	struct heap_entry he_rt = h->data[r];
+	struct heap_entry he_lt = (l < h->len) ? h->data[l] : (struct heap_entry){};
+	struct heap_entry he_rt = (r < h->len) ? h->data[r] : (struct heap_entry){};
 	struct heap_entry he_i = h->data[i];
 
 	if(l < h->len && var_array_get(he_lt.arr, he_lt.idx, int) < var_array_get(he_i.arr, he_i.idx, int))

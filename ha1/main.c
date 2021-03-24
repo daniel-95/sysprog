@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include "var_array.h"
 #include "heap.h"
@@ -125,7 +126,7 @@ void read_file_async(void *vargs) {
 	sa.sa_flags = SA_RESTART | SA_SIGINFO;
 	sa.sa_sigaction = sigusr1_read_handler;
 
-	if(sigaction(SIGUSR1, &sa, NULL) == -1)
+	if(sigaction(SIGRTMIN, &sa, NULL) == -1)
 		errdump("sigaction\n");
 
 	coro_yield();
@@ -135,11 +136,11 @@ void read_file_async(void *vargs) {
 		errdump("couldn't read input file");
 
 	coro_yield();
-	ctx->aiocb.aio_buf = calloc(1, 32 * 1024);
-	ctx->aiocb.aio_nbytes = 32 * 1024;
+	ctx->aiocb.aio_buf = calloc(1, 128 * 1024);
+	ctx->aiocb.aio_nbytes = 128 * 1024;
 	ctx->aiocb.aio_reqprio = 0;
 	ctx->aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
-	ctx->aiocb.aio_sigevent.sigev_signo = SIGUSR1;
+	ctx->aiocb.aio_sigevent.sigev_signo = SIGRTMIN;
 	ctx->aiocb.aio_sigevent.sigev_value.sival_ptr = ctx;
 
 	coro_yield();
