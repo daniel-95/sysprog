@@ -1,6 +1,8 @@
 #ifndef __HEAP_H
 #define __HEAP_H
 
+// heap.h and heap.c contain implementation of minheap
+
 #define parent(i) ((i - 1) / 2)
 #define left(i)   (2 * i + 1)
 #define right(i)  (2 * i + 2)

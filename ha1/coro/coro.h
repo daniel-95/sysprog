@@ -26,6 +26,7 @@ struct coroutine {
 	coro_state state;
 };
 
+// global coroutines state
 struct coroutine *current;
 struct coroutine *coros[64];
 static int current_i = 0;
@@ -47,7 +48,9 @@ void coro_free(struct coroutine *c);
 // waitgroup
 
 struct wait_group {
+	// cnt indicates the number of wg_wait calls
 	int cnt;
+	// fresh indicates whether this wait_group was used or not
 	bool fresh;
 };
 

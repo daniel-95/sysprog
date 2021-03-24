@@ -1,18 +1,26 @@
 #include "coro.h"
 
+// __coro_sched performs round-robin coroutines scheduling
 void __coro_sched() {
 	for(int i = 1; i < coro_len; i++) {
+		// suspended and awaiting coroutines are candidates to be awaken
 		if(coros[(current_i + i) % coro_len]->state == CORO_SUSPENDED || coros[(current_i + i) % coro_len]->state == CORO_AWAITING) {
 			struct coroutine *coro_old = current;
 			current = coros[(current_i + i) % coro_len];
 			current_i = (current_i + i) % coro_len;
 
+			// computing the time this coroutine took from previous yield to current one
 			struct timeval tcoro_old, tdiff;
 			gettimeofday(&tcoro_old, NULL);
 			timersub(&tcoro_old, &current_timeval, &tdiff);
 			timeradd(&coro_old->elapsed, &tdiff, &coro_old->elapsed);
 			gettimeofday(&current_timeval, NULL);
 
+			// there are 4 possible cases:
+			// SUSPENDED - SUSPENDED - previous coroutine was suspended by yield so as the new one
+			// SUSPENDED - AWAITING - previous coroutine was suspended but the new one is waiting on wait_group
+			// AWAITING - SUSPENDED - previous coroutine was awaiting on wait_group, the new one was suspended by yield
+			// AWAITING - AWAITING - both previous and current coroutines are awaiting wait_group
 			if(coro_old->state == CORO_SUSPENDED) {
 				if(current->state == CORO_SUSPENDED) {
 					current->state = CORO_RUNNING;
@@ -35,6 +43,7 @@ void __coro_sched() {
 }
 
 void coro_yield() {
+	// dead coros must not be awaken again
 	if(current->state != CORO_DEAD)
 		current->state = CORO_SUSPENDED;
 
@@ -42,14 +51,17 @@ void coro_yield() {
 }
 
 void coro_put(struct coroutine *coro_new) {
+	// new coros are suspended by default and awaken later by __coro_sched
 	coro_new->state = CORO_SUSPENDED;
 	coros[coro_len++] = coro_new;
 }
 
 void coro_run() {
+	// this context indicates the ending point to which execution will get after all coroutines are dead
 	ucontext_t uctx_current;
 	getcontext(&uctx_return);
 
+	// this flag helps to avoid infinite looping over the dead coroutines
 	if(is_done)
 		return;
 

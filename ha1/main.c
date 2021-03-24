@@ -22,6 +22,7 @@ struct sort_args {
 	struct wait_group *wg_read;
 };
 
+// partition part of qsort
 int partition(struct var_array *nums, int low, int high) {
 	int p = var_array_get(nums, high, int);
 	int i = low - 1;
@@ -47,6 +48,7 @@ int partition(struct var_array *nums, int low, int high) {
 	return i+1;
 }
 
+// qsort
 void sort_numbers_quickly(struct var_array *nums, int low, int high, struct wait_group *wg_sort) {
 	wg_add(wg_sort);
 
@@ -62,9 +64,12 @@ void sort_numbers_quickly(struct var_array *nums, int low, int high, struct wait
 	wg_done(wg_sort);
 }
 
+// entry point for sorting
 void sort(void *vargs) {
 	struct sort_args *args = (struct sort_args*) vargs;
+	// rise sorting wait group in order to avoid race
 	wg_add(args->wg_sort);
+	// waiting for corresponding read to finish
 	wg_wait(args->wg_read);
 
 	sort_numbers_quickly(args->nums, 0, var_array_len(args->nums) - 1, args->wg_sort);
@@ -82,6 +87,7 @@ struct aio_ctx {
 	struct read_args *ra;
 };
 
+// aio_read handler, stores all the file contents in the aio_buf
 void sigusr1_read_handler(int sig, siginfo_t *si, void *ptr) {
 	struct aio_ctx *ctx = (struct aio_ctx*)si->si_value.sival_ptr;
 	int in, offset;
@@ -92,10 +98,12 @@ void sigusr1_read_handler(int sig, siginfo_t *si, void *ptr) {
 		data += offset;
 	}
 
+	// reading is done, data may be sorted
 	wg_done(ctx->ra->wg_read);
 	free(si->si_value.sival_ptr);
 }
 
+// read_file_async performs asyncronous read from disk
 void read_file_async(void *vargs) {
 	struct read_args *args = (struct read_args *) vargs;
 	wg_add(args->wg_read);
@@ -144,6 +152,7 @@ struct merge_args {
 	struct var_array **lists;
 };
 
+// grand_merge performs k-way merge using minheap
 void grand_merge(void *vargs) {
 	struct merge_args *args = (struct merge_args *) vargs;
 
@@ -189,6 +198,7 @@ void grand_merge(void *vargs) {
 	heap_free(h);
 }
 
+// This program takes filenames as argv[1..N], sorts them and merges into single array using coroutines
 int main(int argc, char *argv[]) {
 	if(argc < 2) {
 		usage();
@@ -197,9 +207,13 @@ int main(int argc, char *argv[]) {
 
 	coro_prepare();
 
+	// lists stores number arrays
 	struct var_array **lists = malloc((argc - 1) * sizeof(struct var_array*));
+	// ra stores arguments for reading coroutines
 	struct read_args *ra = malloc((argc - 1) * sizeof(struct read_args));
+	// wg_reads stores wait_groups intended to sync reading and sorting, i.e. sorting must wait wor reading to end
 	struct wait_group **wg_reads = malloc((argc - 1) * sizeof(struct wait_group*));
+	// reading coroutines
 	struct coroutine **c_read = malloc(sizeof(struct coroutine*) * (argc - 1));
 
 	for(int i = 0; i < argc - 1; i++) {
@@ -213,9 +227,13 @@ int main(int argc, char *argv[]) {
 		coro_put(c_read[i]);
 	}
 
+	// d stores arguments for sorting coroutines
 	struct sort_args *d = malloc(sizeof(struct sort_args) * (argc - 1));
+	// coroutines itself
 	struct coroutine **c = malloc(sizeof(struct coroutine*) * (argc - 1));
+	// wait_group that syncs merge and sorts - merge must wait for all sorting coroutines to end
 	struct wait_group *wg_sort_files = wg_new();
+
 	for(int i = 0; i < argc - 1; i++) {
 		d[i].nums = lists[i];
 		d[i].wg_sort = wg_sort_files;
@@ -225,6 +243,7 @@ int main(int argc, char *argv[]) {
 		coro_put(c[i]);
 	}
 
+	// ma sotres merge arguments
 	struct merge_args *ma = malloc(sizeof(struct merge_args));
 	ma->wg_sort_files = wg_sort_files;
 	ma->lists = lists;
