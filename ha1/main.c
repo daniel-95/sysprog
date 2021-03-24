@@ -173,17 +173,20 @@ void grand_merge(void *vargs) {
 	int print_count = 0;
 	coro_yield();
 
+	FILE *fout = fopen("sequence.txt", "w");
+	memcheck(fout, "couldn't open output file");
+
 	while(h->len > 0/* just in case */) {
 		struct heap_entry he = h->data[0];
 
 		if(print_count == 0)
 			print_count++;
 		else
-			printf(" ");
+			fprintf(fout, "%s", " ");
 
 		coro_yield();
 
-		printf("%d", var_array_get(he.arr, he.idx++, int));
+		fprintf(fout, "%d", var_array_get(he.arr, he.idx++, int));
 		h->data[0] = he;
 
 		if(he.idx == he.arr->len) {
@@ -201,6 +204,7 @@ void grand_merge(void *vargs) {
 	}
 
 	heap_free(h);
+	fclose(fout);
 }
 
 // This program takes filenames as argv[1..N], sorts them and merges into single array using coroutines
@@ -273,7 +277,7 @@ int main(int argc, char *argv[]) {
 	gettimeofday(&t2, NULL);
 	timersub(&t2, &t1, &tres);
 
-	printf("\nIt all took %ld usec\n", tres.tv_sec * 1000000 + tres.tv_usec);
+	printf("It all took %ld usec\n", tres.tv_sec * 1000000 + tres.tv_usec);
 	printf("each coroutine took:\n");
 	printf("reading:\n");
 
