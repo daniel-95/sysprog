@@ -13,7 +13,7 @@
 #include "coro.h"
 
 #define usage() printf("usage: ./run file1 [file2 ... fileN]\n")
-#define errdump(msg) printf("[ERROR] %s\n", msg);
+#define errdump(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
 struct sort_args {
 	struct var_array *nums;
@@ -75,23 +75,22 @@ struct read_args {
 };
 
 struct aio_ctx {
-	struct aiocb *aiocb;
-	struct wait_group *wg_read;
-	struct var_array *list;
+	struct aiocb aiocb;
+	struct read_args *ra;
 };
 
 void sigusr1_read_handler(int sig, siginfo_t *si, void *ptr) {
-	struct aio_ctx ctx = (struct aio_ctx*)si->si_value.sival_ptr;
+	struct aio_ctx *ctx = (struct aio_ctx*)si->si_value.sival_ptr;
 	int in, offset;
-	char *data = (char *)ctx->aiocb->aio_buf;
+	char *data = (char *)ctx->aiocb.aio_buf;
 
 	while(sscanf(data, "%d%n", &in, &offset) == 1) {
-		var_array_put(ctx->list, in, int);
+		var_array_put(ctx->ra->list, in, int);
 		data += offset;
 	}
 
+	wg_done(ctx->ra->wg_read);
 	free(si->si_value.sival_ptr);
-	wg_done(ctx->wg_read);
 }
 
 void read_file_async(void *vargs) {
@@ -101,22 +100,39 @@ void read_file_async(void *vargs) {
 	FILE *fh = fopen(args->file_name, "r");
 
 	coro_yield();
-	if(fh == NULL) {
+	if(fh == NULL)
 		errdump("couldn't open the file");
-		return;
-	}
 
-//	int in;
-//
-//	coro_yield();
-//	while(fscanf(fh, "%d", &in) == 1) {
-//		var_array_put(args->list, in, int);
-//		coro_yield();
-//	}
-//
-//	fclose(fh);
-//	wg_done(args->wg_read);
-	
+	struct aio_ctx *ctx = malloc(sizeof(struct aio_ctx));
+	struct sigaction sa;
+
+	coro_yield();
+	memset(&ctx->aiocb, 0, sizeof(struct aiocb));
+	ctx->ra = args;
+
+	coro_yield();
+	sa.sa_flags = SA_RESTART | SA_SIGINFO;
+	sa.sa_sigaction = sigusr1_read_handler;
+
+	if(sigaction(SIGUSR1, &sa, NULL) == -1)
+		errdump("sigaction\n");
+
+	coro_yield();
+	ctx->aiocb.aio_fildes = open(args->file_name, O_RDONLY);
+
+	if(ctx->aiocb.aio_fildes == -1)
+		errdump("couldn't read input file");
+
+	coro_yield();
+	ctx->aiocb.aio_buf = calloc(1, 32 * 1024);
+	ctx->aiocb.aio_nbytes = 32 * 1024;
+	ctx->aiocb.aio_reqprio = 0;
+	ctx->aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
+	ctx->aiocb.aio_sigevent.sigev_signo = SIGUSR1;
+	ctx->aiocb.aio_sigevent.sigev_value.sival_ptr = ctx;
+
+	coro_yield();
+	aio_read(&ctx->aiocb);
 }
 
 struct merge_args {
@@ -190,7 +206,7 @@ int main(int argc, char *argv[]) {
 		ra[i].wg_read = wg_reads[i];
 		ra[i].list = lists[i];
 
-		c_read[i] = coro_init(read_file_alloc, &ra[i]);
+		c_read[i] = coro_init(read_file_async, &ra[i]);
 		coro_put(c_read[i]);
 	}
 
