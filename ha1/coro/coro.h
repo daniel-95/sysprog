@@ -7,17 +7,19 @@
 #include <string.h>
 #include <stdbool.h>
 #include <signal.h>
+#include <sys/time.h>
 
 // coroutine
 
 typedef enum {
-	RUNNING,
-	SUSPENDED,
-	AWAITING,
-	DEAD
+	CORO_RUNNING,
+	CORO_SUSPENDED,
+	CORO_AWAITING,
+	CORO_DEAD
 } coro_state;
 
 struct coroutine {
+	struct timeval elapsed;
 	char *stack;
 	ucontext_t uctx;
 	ucontext_t uctx_wait;
@@ -31,6 +33,7 @@ static int coro_len = 0;
 ucontext_t uctx_finished, uctx_return;
 char stack_finished[32 * 1024];
 static bool is_done = false;
+struct timeval current_timeval;
 
 void __coro_sched();
 void coro_yield();

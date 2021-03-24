@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #include "var_array.h"
 #include "heap.h"
@@ -63,9 +64,11 @@ void sort_numbers_quickly(struct var_array *nums, int low, int high, struct wait
 
 void sort(void *vargs) {
 	struct sort_args *args = (struct sort_args*) vargs;
+	wg_add(args->wg_sort);
 	wg_wait(args->wg_read);
 
 	sort_numbers_quickly(args->nums, 0, var_array_len(args->nums) - 1, args->wg_sort);
+	wg_done(args->wg_sort);
 }
 
 struct read_args {
@@ -229,7 +232,29 @@ int main(int argc, char *argv[]) {
 
 	struct coroutine *merge = coro_init(grand_merge, ma);
 	coro_put(merge);
+
+	// measuring the execution time
+	struct timeval t1, t2, tres;
+	gettimeofday(&t1, NULL);
+
 	coro_run();
+
+	gettimeofday(&t2, NULL);
+	timersub(&t2, &t1, &tres);
+
+	printf("\nIt all took %ld usec\n", tres.tv_sec * 1000000 + tres.tv_usec);
+	printf("each coroutine took:\n");
+	printf("reading:\n");
+
+	for(int i = 0; i < argc - 1; i++)
+		printf(" * %ld usec\n", c_read[i]->elapsed.tv_sec * 1000000 + c_read[i]->elapsed.tv_usec);
+
+	printf("sorting:\n");
+
+	for(int i = 0; i < argc - 1; i++)
+		printf(" * %ld usec\n", c[i]->elapsed.tv_sec * 1000000 + c[i]->elapsed.tv_usec);
+
+	printf("merge: %ld usec\n", merge->elapsed.tv_sec * 1000000 + merge->elapsed.tv_usec);
 
 	// releasing memory
 	for(int i = 0; i < argc - 1; i++) {

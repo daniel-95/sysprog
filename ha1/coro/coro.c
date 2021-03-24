@@ -2,21 +2,27 @@
 
 void __coro_sched() {
 	for(int i = 1; i < coro_len; i++) {
-		if(coros[(current_i + i) % coro_len]->state == SUSPENDED || coros[(current_i + i) % coro_len]->state == AWAITING) {
+		if(coros[(current_i + i) % coro_len]->state == CORO_SUSPENDED || coros[(current_i + i) % coro_len]->state == CORO_AWAITING) {
 			struct coroutine *coro_old = current;
 			current = coros[(current_i + i) % coro_len];
 			current_i = (current_i + i) % coro_len;
 
-			if(coro_old->state == SUSPENDED) {
-				if(current->state == SUSPENDED) {
-					current->state = RUNNING;
+			struct timeval tcoro_old, tdiff;
+			gettimeofday(&tcoro_old, NULL);
+			timersub(&tcoro_old, &current_timeval, &tdiff);
+			timeradd(&coro_old->elapsed, &tdiff, &coro_old->elapsed);
+			gettimeofday(&current_timeval, NULL);
+
+			if(coro_old->state == CORO_SUSPENDED) {
+				if(current->state == CORO_SUSPENDED) {
+					current->state = CORO_RUNNING;
 					swapcontext(&coro_old->uctx, &current->uctx);
 				} else {
 					swapcontext(&coro_old->uctx, &current->uctx_wait);
 				}
 			} else {
-				if(current->state == SUSPENDED) {
-					current->state = RUNNING;
+				if(current->state == CORO_SUSPENDED) {
+					current->state = CORO_RUNNING;
 					setcontext(&current->uctx);
 				} else {
 					setcontext(&current->uctx_wait);
@@ -29,14 +35,14 @@ void __coro_sched() {
 }
 
 void coro_yield() {
-	if(current->state != DEAD)
-		current->state = SUSPENDED;
+	if(current->state != CORO_DEAD)
+		current->state = CORO_SUSPENDED;
 
 	__coro_sched();
 }
 
 void coro_put(struct coroutine *coro_new) {
-	coro_new->state = SUSPENDED;
+	coro_new->state = CORO_SUSPENDED;
 	coros[coro_len++] = coro_new;
 }
 
@@ -49,9 +55,10 @@ void coro_run() {
 
 	is_done = true;
 
+	gettimeofday(&current_timeval, NULL);
 	for(int i = 0; i < coro_len; i++) {
-		if(coros[i]->state == SUSPENDED) {
-			coros[i]->state = RUNNING;
+		if(coros[i]->state == CORO_SUSPENDED) {
+			coros[i]->state = CORO_RUNNING;
 			current = coros[i];
 			current_i = i;
 			swapcontext(&uctx_current, &coros[i]->uctx);
@@ -60,7 +67,7 @@ void coro_run() {
 }
 
 void coro_finished() {
-	current->state = DEAD;
+	current->state = CORO_DEAD;
 	// sched
 	coro_yield();
 	// only the last coroutine will get there
@@ -75,12 +82,14 @@ void coro_prepare() {
 	makecontext(&uctx_finished, coro_finished, 0);
 
 	is_done = false;
+	timerclear(&current_timeval);
 }
 
 struct coroutine *coro_init(void (*f)(void*), void *args) {
 	struct coroutine *coro_new = malloc(sizeof(struct coroutine));
 	memset(coro_new, 0, sizeof(struct coroutine));
-	coro_new->state = SUSPENDED;
+	coro_new->state = CORO_SUSPENDED;
+	timerclear(&coro_new->elapsed);
 
 	getcontext(&coro_new->uctx);
 
@@ -126,11 +135,11 @@ void wg_wait(struct wait_group *wg) {
 	getcontext(&current->uctx_wait);
 
 	if(wg->fresh == false && wg->cnt == 0) {
-		current->state = RUNNING;
+		current->state = CORO_RUNNING;
 		return;
 	}
 
-	current->state = AWAITING;
+	current->state = CORO_AWAITING;
 	__coro_sched();
 }
 
