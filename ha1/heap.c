@@ -2,12 +2,16 @@
 
 #include "heap.h"
 #include "var_array.h"
+#include "macro.h"
 
 struct heap *new_heap(int size) {
 	struct heap *h = malloc(sizeof(struct heap));
+	memcheck(h, "couldn't allocate memory for h");
+
 	h->len = 0;
 	h->cap = size;
 	h->data = malloc(size * sizeof(struct heap_entry));
+	memcheck(h->data, "couldn't allocate memory for h->data");
 
 	return h;
 }

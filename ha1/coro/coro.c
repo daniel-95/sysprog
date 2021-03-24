@@ -1,4 +1,5 @@
 #include "coro.h"
+#include "macro.h"
 
 // __coro_sched performs round-robin coroutines scheduling
 void __coro_sched() {
@@ -99,6 +100,8 @@ void coro_prepare() {
 
 struct coroutine *coro_init(void (*f)(void*), void *args) {
 	struct coroutine *coro_new = malloc(sizeof(struct coroutine));
+	memcheck(coro_new, "couldn't allocate memory for coro_new");
+
 	memset(coro_new, 0, sizeof(struct coroutine));
 	coro_new->state = CORO_SUSPENDED;
 	timerclear(&coro_new->elapsed);
@@ -106,6 +109,8 @@ struct coroutine *coro_init(void (*f)(void*), void *args) {
 	getcontext(&coro_new->uctx);
 
 	coro_new->stack = malloc(32 * 1024);
+	memcheck(coro_new->stack, "couldn't allocate memory for coro_new->stack");
+
 	stack_t ss;
 	ss.ss_sp = coro_new->stack;
 	ss.ss_size = 32 * 1024;
@@ -128,6 +133,7 @@ void coro_free(struct coroutine *c) {
 // wait group
 struct wait_group *wg_new() {
 	struct wait_group *wg = malloc(sizeof(struct wait_group));
+	memcheck(wg, "couldn't allocate memory for wg");
 	wg->cnt = 0;
 	wg->fresh = true;
 	return wg;

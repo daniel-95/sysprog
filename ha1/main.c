@@ -13,9 +13,9 @@
 #include "var_array.h"
 #include "heap.h"
 #include "coro.h"
+#include "macro.h"
 
 #define usage() printf("usage: ./run file1 [file2 ... fileN]\n")
-#define errdump(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
 struct sort_args {
 	struct var_array *nums;
@@ -116,6 +116,8 @@ void read_file_async(void *vargs) {
 		errdump("couldn't open the file");
 
 	struct aio_ctx *ctx = malloc(sizeof(struct aio_ctx));
+	memcheck(ctx, "couldn't allocate memory for aio_ctx");
+
 	struct sigaction sa;
 
 	coro_yield();
@@ -137,6 +139,8 @@ void read_file_async(void *vargs) {
 
 	coro_yield();
 	ctx->aiocb.aio_buf = calloc(1, 128 * 1024);
+	memcheck(ctx->aiocb.aio_buf, "couldn't allocate memory for aio_buf");
+
 	ctx->aiocb.aio_nbytes = 128 * 1024;
 	ctx->aiocb.aio_reqprio = 0;
 	ctx->aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
@@ -210,12 +214,16 @@ int main(int argc, char *argv[]) {
 
 	// lists stores number arrays
 	struct var_array **lists = malloc((argc - 1) * sizeof(struct var_array*));
+	memcheck(lists, "couldn't allocate memory for lists");
 	// ra stores arguments for reading coroutines
 	struct read_args *ra = malloc((argc - 1) * sizeof(struct read_args));
+	memcheck(ra, "couldn't allocate memory for ra");
 	// wg_reads stores wait_groups intended to sync reading and sorting, i.e. sorting must wait wor reading to end
 	struct wait_group **wg_reads = malloc((argc - 1) * sizeof(struct wait_group*));
+	memcheck(wg_reads, "couldn't allocate memory for wg_reads");
 	// reading coroutines
 	struct coroutine **c_read = malloc(sizeof(struct coroutine*) * (argc - 1));
+	memcheck(c_read, "couldn't allocate memory for c_read");
 
 	for(int i = 0; i < argc - 1; i++) {
 		wg_reads[i] = wg_new();
@@ -230,8 +238,10 @@ int main(int argc, char *argv[]) {
 
 	// d stores arguments for sorting coroutines
 	struct sort_args *d = malloc(sizeof(struct sort_args) * (argc - 1));
+	memcheck(d, "couldn't allocate memory for d");
 	// coroutines itself
 	struct coroutine **c = malloc(sizeof(struct coroutine*) * (argc - 1));
+	memcheck(c, "couldn't allocate memory for c");
 	// wait_group that syncs merge and sorts - merge must wait for all sorting coroutines to end
 	struct wait_group *wg_sort_files = wg_new();
 
@@ -246,6 +256,7 @@ int main(int argc, char *argv[]) {
 
 	// ma sotres merge arguments
 	struct merge_args *ma = malloc(sizeof(struct merge_args));
+	memcheck(ma, "couldn't allocate memory for ma");
 	ma->wg_sort_files = wg_sort_files;
 	ma->lists = lists;
 	ma->lists_num = argc-1;
