@@ -83,6 +83,14 @@ struct coroutine *coro_init(void (*f)(void*), void *args) {
 	coro_new->state = SUSPENDED;
 
 	getcontext(&coro_new->uctx);
+
+	coro_new->stack = malloc(32 * 1024);
+	stack_t ss;
+	ss.ss_sp = coro_new->stack;
+	ss.ss_size = 32 * 1024;
+	ss.ss_flags = 0;
+	sigaltstack(&ss, NULL);
+
 	coro_new->uctx.uc_stack.ss_sp = coro_new->stack;
 	coro_new->uctx.uc_stack.ss_size = 32 * 1024;
 	coro_new->uctx.uc_link = &uctx_finished;
@@ -92,6 +100,7 @@ struct coroutine *coro_init(void (*f)(void*), void *args) {
 }
 
 void coro_free(struct coroutine *c) {
+	free(c->stack);
 	free(c);
 }
 

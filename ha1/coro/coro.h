@@ -6,6 +6,7 @@
 #include <ucontext.h>
 #include <string.h>
 #include <stdbool.h>
+#include <signal.h>
 
 // coroutine
 
@@ -17,7 +18,7 @@ typedef enum {
 } coro_state;
 
 struct coroutine {
-	char stack[128 * 1024];
+	char *stack;
 	ucontext_t uctx;
 	ucontext_t uctx_wait;
 	coro_state state;
