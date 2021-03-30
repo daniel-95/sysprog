@@ -3,11 +3,13 @@
 
 // __coro_sched performs round-robin coroutines scheduling
 void __coro_sched() {
+	int coro_len = var_array_len(coros);
 	for(int i = 1; i < coro_len; i++) {
+		struct coroutine *coro_it = var_array_get(coros, ((current_i + i) % coro_len), struct coroutine*);
 		// suspended and awaiting coroutines are candidates to be awaken
-		if(coros[(current_i + i) % coro_len]->state == CORO_SUSPENDED || coros[(current_i + i) % coro_len]->state == CORO_AWAITING) {
+		if(coro_it->state == CORO_SUSPENDED || coro_it->state == CORO_AWAITING) {
 			struct coroutine *coro_old = current;
-			current = coros[(current_i + i) % coro_len];
+			current = coro_it;
 			current_i = (current_i + i) % coro_len;
 
 			// computing the time this coroutine took from previous yield to current one
@@ -54,7 +56,7 @@ void coro_yield() {
 void coro_put(struct coroutine *coro_new) {
 	// new coros are suspended by default and awaken later by __coro_sched
 	coro_new->state = CORO_SUSPENDED;
-	coros[coro_len++] = coro_new;
+	var_array_put(coros, coro_new, struct coroutine*);
 }
 
 void coro_run() {
@@ -69,12 +71,14 @@ void coro_run() {
 	is_done = true;
 
 	gettimeofday(&current_timeval, NULL);
+	int coro_len = var_array_len(coros);
 	for(int i = 0; i < coro_len; i++) {
-		if(coros[i]->state == CORO_SUSPENDED) {
-			coros[i]->state = CORO_RUNNING;
-			current = coros[i];
+		struct coroutine *coro_it = var_array_get(coros, i, struct coroutine*);
+		if(coro_it->state == CORO_SUSPENDED) {
+			coro_it->state = CORO_RUNNING;
+			current = coro_it;
 			current_i = i;
-			swapcontext(&uctx_current, &coros[i]->uctx);
+			swapcontext(&uctx_current, &coro_it->uctx);
 		}
 	}
 }
@@ -96,6 +100,8 @@ void coro_prepare() {
 
 	is_done = false;
 	timerclear(&current_timeval);
+
+	coros = var_array_init(32, sizeof(struct coroutine*));
 }
 
 struct coroutine *coro_init(void (*f)(void*), void *args) {

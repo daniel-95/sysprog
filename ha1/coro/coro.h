@@ -9,6 +9,8 @@
 #include <signal.h>
 #include <sys/time.h>
 
+#include "var_array.h"
+
 // coroutine
 
 typedef enum {
@@ -28,12 +30,11 @@ struct coroutine {
 
 // global coroutines state
 struct coroutine *current;
-struct coroutine *coros[64];
-static int current_i = 0;
-static int coro_len = 0;
+struct var_array *coros;
+int current_i;
 ucontext_t uctx_finished, uctx_return;
 char stack_finished[32 * 1024];
-static bool is_done = false;
+bool is_done;
 struct timeval current_timeval;
 
 void __coro_sched();
