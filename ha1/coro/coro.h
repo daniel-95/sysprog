@@ -11,6 +11,8 @@
 
 #include "var_array.h"
 
+#define CORO_STACK_SIZE 32*1024
+
 // coroutine
 
 typedef enum {
@@ -33,7 +35,7 @@ struct coroutine *current;
 struct var_array *coros;
 int current_i;
 ucontext_t uctx_finished, uctx_return;
-char stack_finished[32 * 1024];
+char stack_finished[CORO_STACK_SIZE];
 bool is_done;
 struct timeval current_timeval;
 

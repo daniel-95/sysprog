@@ -94,7 +94,7 @@ void coro_finished() {
 void coro_prepare() {
 	getcontext(&uctx_finished);
 	uctx_finished.uc_stack.ss_sp = stack_finished;
-	uctx_finished.uc_stack.ss_size = 16 * 1024;
+	uctx_finished.uc_stack.ss_size = CORO_STACK_SIZE;
 	uctx_finished.uc_link = NULL;
 	makecontext(&uctx_finished, coro_finished, 0);
 
@@ -114,17 +114,17 @@ struct coroutine *coro_init(void (*f)(void*), void *args) {
 
 	getcontext(&coro_new->uctx);
 
-	coro_new->stack = malloc(32 * 1024);
+	coro_new->stack = malloc(CORO_STACK_SIZE);
 	memcheck(coro_new->stack, "couldn't allocate memory for coro_new->stack");
 
 	stack_t ss;
 	ss.ss_sp = coro_new->stack;
-	ss.ss_size = 32 * 1024;
+	ss.ss_size = CORO_STACK_SIZE;
 	ss.ss_flags = 0;
 	sigaltstack(&ss, NULL);
 
 	coro_new->uctx.uc_stack.ss_sp = coro_new->stack;
-	coro_new->uctx.uc_stack.ss_size = 32 * 1024;
+	coro_new->uctx.uc_stack.ss_size = CORO_STACK_SIZE;
 	coro_new->uctx.uc_link = &uctx_finished;
 	makecontext(&coro_new->uctx, (void (*)(void))f, 1, args);
 
