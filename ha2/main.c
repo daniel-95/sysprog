@@ -6,7 +6,7 @@
 int main(int argc, char *argv[]) {
 	char *input = NULL;
 	size_t input_size = 0;
-	struct cmds *cmds;
+	struct var_array *cmds;
 
 	printf(">> ");
 	while(getline(&input, &input_size, stdin) != -1) {

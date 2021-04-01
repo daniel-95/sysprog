@@ -23,7 +23,7 @@ struct cmd_token {
 	char *value;
 };
 
-void cmd_parse(const char *input, size_t input_size, struct cmds **cmds);
-void cmd_execute(struct cmds *cmds);
+void cmd_parse(const char *input, size_t input_size, struct var_array **cmds);
+void cmd_execute(struct var_array *cmds);
 
 #endif
