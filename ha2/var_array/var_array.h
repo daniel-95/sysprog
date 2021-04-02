@@ -30,6 +30,9 @@ struct var_array * var_array_init(size_t reserve, size_t el_size);
 	var_array_set(va, idx_a, type, var_array_get(va, idx_b, type)); \
 	var_array_set(va, idx_b, type, tmp);                            \
 }
+#define var_array_raw(va, type) ((type*)va->data)
+
+#define var_array_raw(va, type) ((type*)va->data)
 
 #define var_array_free(va) { \
 	free(va->data);      \
