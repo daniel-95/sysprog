@@ -10,38 +10,100 @@
 #include "cmd.h"
 #include "var_array.h"
 
+const char *__cmd_builtin[] = {
+	"about",
+	"cd"
+};
+
+__cmd_func __cmd_builtin_func[] = {
+	__cmd_about,
+	__cmd_cd
+};
+
+void __cmd_about() {
+	char *msg = 	"            ______             \n"
+			"       .d$$$******$$$$c.       \n"
+			"    .d$P\"            \"$$c      \n"
+			"   $$$$$.           .$$$*$.    \n"
+			" .$$ 4$L*$$.     .$$Pd$  '$b   \n"
+			" $F   *$. \"$$e.e$$\" 4$F   ^$b  \n"
+			"d$     $$   z$$$e   $$     '$. \n"
+			"$P     `$L$$P` `\"$$d$\"      $$ \n"
+			"$$     e$$F       4$$b.     $$ \n"
+			"$b  .$$\" $$      .$$ \"4$b.  $$ \n"
+			"$$e$P\"    $b     d$`    \"$$c$F \n"
+			"'$P$$$$$$$$$$$$$$$$$$$$$$$$$$  \n"
+			" \"$c.      4$.  $$       .$$   \n"
+			"  ^$$.      $$ d$\"      d$P    \n"
+			"    \"$$c.   `$b$F    .d$P\"     \n"
+			"      `4$$$c.$$$..e$$P\"        \n"
+			"	  `^^^^^^^`             \n";
+
+	printf("MOSH - Minimalistic Open SHell\n\n%s\n", msg);
+}
+
+void __cmd_cd(char *dst) {
+	printf("cd mocked for now\n");
+}
+
+__cmd_func __cmd_is_builtin(char *cmd_name) {
+	for(int i = 0; i < __cmd_builtin_len(); i++) {
+		if(strcmp(cmd_name, __cmd_builtin[i]) == 0)
+			return __cmd_builtin_func[i];
+	}
+
+	return NULL;
+}
+
 void cmd_parse(const char *input, size_t input_size, struct var_array **cmds) {
-	// p points to the beginning of a lexeme
-	// i iterates over the input string looking for lexeme ending
+	// lex_begin points to the beginning of a lexeme
+	// it iterates over the input string looking for lexeme ending
 	size_t lex_begin = 0;
 	size_t it = 0;
 	bool is_lexeme = false;
+
+	// is_open_quote stores the type of the quoting sign
+	char is_open_quote = '\0';
 
 	*cmds = var_array_init(8, sizeof(struct cmd));
 	struct var_array *token_list = var_array_init(8, sizeof(struct cmd_token));
 
 	while(it < input_size && input[it] != '\0') {
 		if(is_lexeme) {
-			// skipping to the end of current lexeme
-			while(it < input_size && !isspace(input[it])) it++;
-
 			struct cmd_token new_token;
+
+			// skipping to the end of current lexeme
+			if(is_open_quote != '\0') {
+				// lex_begin points to the open quote sign, so move it
+				lex_begin++;
+				while(it < input_size && input[it] != is_open_quote) it++;
+
+				// error - couldn't find the closing quote, doing nothing
+				if(it == input_size)
+					return;
+			} else
+				while(it < input_size && !isspace(input[it])) it++;
+
 			new_token.value = malloc(sizeof(char) * (it - lex_begin + 1));
 			strncpy(new_token.value, &input[lex_begin], it - lex_begin);
 
-			if(strcmp(new_token.value, "|") == 0)
+			if(is_open_quote == '\0' && strcmp(new_token.value, "|") == 0)
 				new_token.clid = CMD_ID_PIPE;
 			else
 				new_token.clid = CMD_ID_WORD;
 
 			var_array_put(token_list, new_token, struct cmd_token);
 
+			is_open_quote = '\0';
 			is_lexeme = false;
 		} else {
 			// we've just met lexeme
 			if(!isspace(input[it])) {
 				is_lexeme = true;
 				lex_begin = it;
+
+				if(input[it] == '\'' || input[it] == '"')
+					is_open_quote = input[it];
 			}
 
 			// or we're iterating over sequence of whitespaces doing nothing
@@ -75,6 +137,8 @@ void cmd_parse(const char *input, size_t input_size, struct var_array **cmds) {
 
 		var_array_put((*cmds), new_cmd, struct cmd);
 	}
+
+	var_array_free(token_list);
 }
 
 void cmd_execute(struct var_array *cmds) {

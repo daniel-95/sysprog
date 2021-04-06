@@ -23,7 +23,18 @@ struct cmd_token {
 	char *value;
 };
 
+typedef void (*__cmd_func)();
+
+void __cmd_about();
+void __cmd_cd(char *dst);
+__cmd_func __cmd_is_builtin(char *cmd_name);
+
 void cmd_parse(const char *input, size_t input_size, struct var_array **cmds);
 void cmd_execute(struct var_array *cmds);
+
+extern const char *__cmd_builtin[];
+extern __cmd_func __cmd_builtin_func[];
+
+#define __cmd_builtin_len() (sizeof(__cmd_builtin)/sizeof(const char*))
 
 #endif
