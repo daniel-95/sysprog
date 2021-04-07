@@ -89,6 +89,10 @@ void cmd_parse(const char *input, size_t input_size, struct var_array **cmds) {
 
 			if(is_open_quote == '\0' && strcmp(new_token.value, "|") == 0)
 				new_token.clid = CMD_ID_PIPE;
+			else if(is_open_quote == '\0' && strcmp(new_token.value, ">") == 0)
+				new_token.clid = CMD_ID_WRITE;
+			else if(is_open_quote == '\0' && strcmp(new_token.value, ">>") == 0)
+				new_token.clid = CMD_ID_APPEND;
 			else
 				new_token.clid = CMD_ID_WORD;
 
@@ -112,11 +116,19 @@ void cmd_parse(const char *input, size_t input_size, struct var_array **cmds) {
 		it++;
 	}
 
+	for(int i = 0; i < var_array_len(token_list); i++) {
+		struct cmd_token tk = var_array_get(token_list, i, struct cmd_token);
+		printf("[token] id: %d value: %s\n", tk.clid, tk.value);
+	}
+
 	int t_it = 0;
 	while(t_it < var_array_len(token_list)) {
 		struct cmd new_cmd = {
 			.name = NULL,
-			.args = var_array_init(8, sizeof(char*))
+			.args = var_array_init(8, sizeof(char*)),
+			// let it be default value
+			.write_mode = CMD_ID_WORD,
+			.output_file = NULL
 		};
 
 		while(t_it < var_array_len(token_list)) {
@@ -124,6 +136,22 @@ void cmd_parse(const char *input, size_t input_size, struct var_array **cmds) {
 
 			if(tk.clid == CMD_ID_PIPE) {
 				t_it++;
+				break;
+			} else if(tk.clid == CMD_ID_WRITE || tk.clid == CMD_ID_APPEND) {
+				t_it++;
+				struct cmd_token tk_file = var_array_get(token_list, t_it, struct cmd_token);
+				new_cmd.write_mode = tk.clid;
+				new_cmd.output_file = tk_file.value;
+
+				// skipping tokens until the next pipe
+				while(t_it < var_array_len(token_list)) {
+					struct cmd_token tmp = var_array_get(token_list, t_it, struct cmd_token);
+					if(tmp.clid == CMD_ID_PIPE)
+						break;
+
+					t_it++;
+				}
+
 				break;
 			}
 
@@ -142,36 +170,40 @@ void cmd_parse(const char *input, size_t input_size, struct var_array **cmds) {
 }
 
 void cmd_execute(struct var_array *cmds) {
-	int fd_pipes[var_array_len(cmds) + 1][2];
-	pid_t child_pids[var_array_len(cmds)];
-	int status = 0;
-
-	for(int i = 0; i < var_array_len(cmds) + 1; i++)
-		pipe2(fd_pipes[i], O_CLOEXEC);
-
-	close(fd_pipes[0][1]);
 	for(int i = 0; i < var_array_len(cmds); i++) {
 		struct cmd c = var_array_get(cmds, i, struct cmd);
-
-		if((child_pids[i] = fork()) == 0) {
-			dup2(fd_pipes[i][0], 0);
-			dup2(fd_pipes[i+1][1], 1);
-			execvp(c.name, var_array_raw(c.args, char*));
-		}
+		printf("[cmd] name: %s write_mode: %d\n", c.name, c.write_mode);
 	}
-
-	// waiting for all children to complete execution
-	for(int i = 0; i < var_array_len(cmds); i++) {
-		waitpid(child_pids[i], &status, 0);
-		close(fd_pipes[i][0]);
-		close(fd_pipes[i+1][1]);
-	}
-
-	char buf[1024];
-	size_t buf_size;
-	while((buf_size = read(fd_pipes[var_array_len(cmds)][0], buf, 1024)) > 0)
-		write(STDOUT_FILENO, buf, buf_size);
-
-	close(fd_pipes[var_array_len(cmds)][0]);
+//	int fd_pipes[var_array_len(cmds) + 1][2];
+//	pid_t child_pids[var_array_len(cmds)];
+//	int status = 0;
+//
+//	for(int i = 0; i < var_array_len(cmds) + 1; i++)
+//		pipe2(fd_pipes[i], O_CLOEXEC);
+//
+//	close(fd_pipes[0][1]);
+//	for(int i = 0; i < var_array_len(cmds); i++) {
+//		struct cmd c = var_array_get(cmds, i, struct cmd);
+//
+//		if((child_pids[i] = fork()) == 0) {
+//			dup2(fd_pipes[i][0], 0);
+//			dup2(fd_pipes[i+1][1], 1);
+//			execvp(c.name, var_array_raw(c.args, char*));
+//		}
+//	}
+//
+//	// waiting for all children to complete execution
+//	for(int i = 0; i < var_array_len(cmds); i++) {
+//		waitpid(child_pids[i], &status, 0);
+//		close(fd_pipes[i][0]);
+//		close(fd_pipes[i+1][1]);
+//	}
+//
+//	char buf[1024];
+//	size_t buf_size;
+//	while((buf_size = read(fd_pipes[var_array_len(cmds)][0], buf, 1024)) > 0)
+//		write(STDOUT_FILENO, buf, buf_size);
+//
+//	close(fd_pipes[var_array_len(cmds)][0]);
 }
 
